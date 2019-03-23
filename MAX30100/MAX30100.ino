@@ -44,14 +44,11 @@ void setup()
   }
   myFile = SD.open("readings.txt", FILE_WRITE);
   if (myFile) {
-  
     myFile.println("test");
-    myFile.close();
-  myFile = SD.open("readings.txt");
-    Serial.print(myFile.read());
     myFile.close();
   } else {
     Serial.println("err");
+    myFile.close();
   }
   // Register a callback for the beat detection
   pox.setOnBeatDetectedCallback(onBeatDetected);
@@ -77,8 +74,13 @@ void loop()
 
   if (millis() - tsLastReport > REPORTING_PERIOD_MS ) {
     calculate_average(pox.getHeartRate(), pox.getSpO2());
+    myFile = SD.open("readings.txt", FILE_WRITE);
 
-    //    Serial.print(average_beat);
+    myFile.println(average_beat);
+    Serial.print(average_beat);
+
+    myFile.close();
+
     //    Serial.print(",");
     //
     //    Serial.print(average_SpO2);
@@ -94,13 +96,16 @@ void loop()
 void serialEvent() {
   while (Serial.available()) {
     // get the new byte:
-    char y = (char)Serial.read();
-    Serial.print(String(y));
-    if (String(y) == "read") {
+    int y = Serial.read();
+    if (y == '\n') {
       myFile = SD.open("readings.txt");
       if (myFile) {
-        Serial.write(myFile.read());
+        while (myFile.available()) {
+          Serial.write(myFile.read());
+        }
         myFile.close();
+        SD.remove("readings.txt");
+
       }
     }
   }
