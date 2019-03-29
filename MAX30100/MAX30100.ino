@@ -8,15 +8,17 @@
 File myFile;
 
 
-#define REPORTING_PERIOD_MS     600
-
-PulseOximeter pox;
+#define REPORTING_PERIOD_MS     60000
 
 uint32_t tsLastReport = 0;
 
 float filterweight = 0.5;
 int average_beat = 0;
 int average_SpO2 = 0;
+
+bool isDataSendingStarted = true;
+
+PulseOximeter pox;
 
 void onBeatDetected()
 {
@@ -30,26 +32,19 @@ void setup()
     ; // wait for serial port to connect. Needed for native USB port only
   }
 
-  Serial.println("Initializing sdCard..");
+  Serial.println("sd_i");
 
   if (!SD.begin(4)) {
-    Serial.println("initialization failed!");
+    Serial.println("sd_i_f");
     while (1);
   }
-  Serial.println("Initializing pulse oximeter..");
+  Serial.println("p_o_i");
 
   if (!pox.begin()) {
-    Serial.println("Initializing pulse oximeter failed");
+    Serial.println("p_o_i_f");
     while (1);
   }
-  myFile = SD.open("readings.txt", FILE_WRITE);
-  if (myFile) {
-    myFile.println("test");
-    myFile.close();
-  } else {
-    Serial.println("err");
-    myFile.close();
-  }
+
   // Register a callback for the beat detection
   pox.setOnBeatDetectedCallback(onBeatDetected);
 }
@@ -58,8 +53,8 @@ void calculate_average(int beat, int SpO2)
 {
 
   if (beat > 30 and beat<220 and SpO2>50) {
-    average_beat = filterweight * (beat) + (1 - filterweight ) * average_beat;
-    average_SpO2 = filterweight * (SpO2) + (1 - filterweight ) * average_SpO2;
+    average_beat = filterweight * (beat) + (1 - filterweight) * average_beat;
+    average_SpO2 = filterweight * (SpO2) + (1 - filterweight) * average_SpO2;
   } else if (beat == 0 || SpO2 == 0) {
     average_beat = 0;
     average_SpO2 = 0;
@@ -68,23 +63,28 @@ void calculate_average(int beat, int SpO2)
 
 }
 
-void loop()
-{
+void loop() {
+
   pox.update();
 
-  if (millis() - tsLastReport > REPORTING_PERIOD_MS ) {
+  if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
     calculate_average(pox.getHeartRate(), pox.getSpO2());
     myFile = SD.open("readings.txt", FILE_WRITE);
 
-    myFile.println(average_beat);
-    Serial.print(average_beat);
+    myFile.print(average_beat);
+    myFile.print(",");
+    myFile.print(average_SpO2);
+    myFile.print(";");
+
+    if (!isDataSendingStarted) {
+      Serial.print(average_beat);
+      Serial.print(",");
+
+      Serial.print(average_SpO2);
+      Serial.print(";");
+    }
 
     myFile.close();
-
-    //    Serial.print(",");
-    //
-    //    Serial.print(average_SpO2);
-    //    Serial.print(";");
 
     tsLastReport = millis();
   } else {
@@ -96,16 +96,41 @@ void loop()
 void serialEvent() {
   while (Serial.available()) {
     // get the new byte:
-    int y = Serial.read();
-    if (y == '\n') {
+    char y = Serial.read();
+    if (y == '1') {
       myFile = SD.open("readings.txt");
+      
       if (myFile) {
+       
+        isDataSendingStarted = true;
+        
         while (myFile.available()) {
           Serial.write(myFile.read());
         }
+        
+        myFile.close();
+        
+      } else {
+        
+        myFile.close();
+        
+      }
+      
+    } else if (y == '2') {
+      
+      myFile = SD.open("readings.txt");
+
+      Serial.println(y);
+      
+      if (myFile) {
+        
         myFile.close();
         SD.remove("readings.txt");
-
+        
+      } else {
+        
+        myFile.close();
+        
       }
     }
   }
